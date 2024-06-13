@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-rails-app-migrate
+spec:
+  template:
+    spec:
+      containers:
+        - name: job-rails-app-migrate
+          image: ${IMAGE}
+          command: ['bin/rails']
+          args: ['db:migrate']
+          env:
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: rails-app-secret
+                  key: secret_key_base
+            - name: RAILS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: rails-app-config
+                  key: rails_env
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: rails-app-secret
+      restartPolicy: Never
+  backoffLimit: 4

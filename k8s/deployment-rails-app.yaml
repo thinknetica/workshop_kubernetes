@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-rails-app
+  labels:
+    app: deployment-rails-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pod-rails-app
+  template:
+    metadata:
+      name: pod-rails-app
+      labels:
+        app: pod-rails-app
+      annotations:
+        secret-update-timestamp: "2024-08-13T10:00:00Z"
+    spec:
+      containers:
+        - name: deployment-rails-app
+          image: ${IMAGE}
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: secret-volume
+              mountPath: 'rails/config/config.json'
+              subPath: 'config.json'
+          env:
+            - name: FOO_KEY
+              value: 'FOO_VALUE'
+            - name: SECRET_KEY_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: rails-app-secret
+                  key: secret_key_base
+            - name: RAILS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: rails-app-config
+                  key: rails_env
+          ports:
+            - containerPort: 3000
+          command: ["./bin/rails"]
+          args: ["server"]
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: rails-app-secret
+      restartPolicy: Always
+      
