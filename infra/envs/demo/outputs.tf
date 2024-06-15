@@ -20,12 +20,12 @@ output "kubernetes_cluster_id" {
 
 output "container_registry_name" {
   description = "ID контейнерного реестра"
-  value       = yandex_container_registry.day-2.name
+  value       = yandex_container_registry.demo.name
 }
 
 output "container_registry_id" {
   description = "ID контейнерного реестра"
-  value       = yandex_container_registry.day-2.id
+  value       = yandex_container_registry.demo.id
 }
 
 output "folder_name" {

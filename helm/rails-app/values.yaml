@@ -1,0 +1,78 @@
+replicaCount: 1
+
+image:
+  repository: cr.yandex/crpeajajv7qumuk1l1kj/hello-rails
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "0.0.10"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  type: ClusterIP
+  port: 3000
+
+migrations:
+  enabled: true
+
+seeds:
+  enabled: true
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 200Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 30
+  timeoutSeconds: 10
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 30
+  timeoutSeconds: 10
+  periodSeconds: 10
+  failureThreshold: 3
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+
+secretEnvs:
+  - name: SECRET_KEY_BASE
+    secretKey: secret_key_base
+configMapEnvs:
+  - name: RAILS_ENV
+    configKey: rails_env
+volumeMounts:
+  - name: secret-volume
+    mountPath: 'rails/config/config.json'
+    subPath: 'config.json'
+
+configMap:
+  data:
+    rails_env: "production"
+secret:
+  data:
+    config.json: ""
+  stringData:
+    secret_key_base: ""

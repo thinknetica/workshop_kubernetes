@@ -1,0 +1,155 @@
+name: Build and Deploy APP
+
+on:
+  workflow_dispatch:
+
+env:
+  HELM_RELEASE_NAME: demo
+  CR_REGISTRY: ${{ secrets.CR_REGISTRY }}
+  CR_REPOSITORY: ${{ secrets.CR_REPOSITORY }}
+  IMAGE_TAG: ${{ github.sha }}
+  K8S_CLUSTER_NAME: ${{ secrets.K8S_CLUSTER_NAME }}
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: get-version
+        uses: battila7/get-version-action@v2
+
+      - name: Save version without 'v' to file
+        run: echo "${{ steps.get-version.outputs.version-without-v }}" > version_without_v.txt
+
+      - name: Upload version files
+        uses: actions/upload-artifact@v4
+        with:
+          name: version_without_v
+          path: version_without_v.txt
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    needs: get-version
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download version files
+        uses: actions/download-artifact@v4
+        with:
+          name: version_without_v
+
+      - name: Read version without 'v'
+        id: read_version_without_v
+        run: echo "VERSION_WITHOUT_V=$(cat version_without_v.txt)" >> $GITHUB_ENV
+
+      - name: Login to Yandex Cloud Container Registry
+        id: login-cr
+        uses: yc-actions/yc-cr-login@v2
+        with:
+          yc-sa-json-credentials: ${{ secrets.YC_DOCKER_PUSHER_SA_JSON_CREDENTIALS }}
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build, tag, and push image to Yandex Cloud Container Registry
+        working-directory: ./app
+        run: |
+          docker buildx build --cache-from type=local,src=/tmp/.buildx-cache --cache-to type=local,dest=/tmp/.buildx-cache --push -t cr.yandex/$CR_REGISTRY/$CR_REPOSITORY:${{ github.sha }} .
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Helm Lint
+        run: |
+          helm lint ./helm/rails-app
+  dry-run:
+    runs-on: ubuntu-latest
+    needs:
+      - get-version
+      - lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Yandex Cloud CLI and Authenticate
+        uses: ./.github/actions/yc-cli-install
+        with:
+          yc_token: ${{ secrets.YC_TOKEN }}
+          yc_cloud_id: ${{ secrets.YC_CLOUD_ID }}
+          yc_folder_id: ${{ secrets.YC_FOLDER_ID }}
+
+      - name: Create Helm Secrets File
+        run: |
+          echo "${{ secrets.RAILS_APP_K8S_SECRET }}" > ./rails-app-secrets.yaml
+
+      - name: Login to Helm Registry (YC Container Registry)
+        run: |
+          export HELM_EXPERIMENTAL_OCI=1
+          yc iam create-token | helm registry login cr.yandex -u iam --password-stdin
+
+      - name: Run Helm Template --dry-run
+        run: |
+          yc managed-kubernetes cluster get-credentials ${{ env.K8S_CLUSTER_NAME }} --external --force
+          helm install ${{ env.HELM_RELEASE_NAME }} ./helm/rails-app --dry-run -f ./rails-app-secrets.yaml
+  package:
+    runs-on: ubuntu-latest
+    needs: dry-run
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download version files
+        uses: actions/download-artifact@v4
+        with:
+          name: version_without_v
+
+      - name: Read version without 'v'
+        id: read_version_without_v
+        run: echo "VERSION_WITHOUT_V=$(cat version_without_v.txt)" >> $GITHUB_ENV
+
+      - name: Install Yandex Cloud CLI and Authenticate
+        uses: ./.github/actions/yc-cli-install
+        with:
+          yc_token: ${{ secrets.YC_TOKEN }}
+          yc_cloud_id: ${{ secrets.YC_CLOUD_ID }}
+          yc_folder_id: ${{ secrets.YC_FOLDER_ID }}
+
+      - name: Package Helm Chart
+        run: |
+          helm package ./helm/rails-app/. --version ${{ env.VERSION_WITHOUT_V }}
+          echo "PACKAGE_NAME=rails-app-${{ env.VERSION_WITHOUT_V }}.tgz" >> $GITHUB_ENV
+          PACKAGE_NAME=rails-app-${{ env.VERSION_WITHOUT_V }}.tgz
+          echo $PACKAGE_NAME > package_name.txt
+
+      - name: Upload package name as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-name
+          path: package_name.txt
+
+      - name: Login to Helm Registry
+        run: |
+          export HELM_EXPERIMENTAL_OCI=1
+          yc iam create-token | helm registry login cr.yandex -u iam --password-stdin
+
+      - name: Push Helm Chart to Yandex Cloud Container Registry
+        run: |
+          PACKAGE_NAME=$(cat package_name.txt)
+          CR_NAME=${{ env.HELM_RELEASE_NAME }}
+          REGISTRY_ID=$(yc container registry get --name "${CR_NAME}" --format json | jq -r .id)
+          helm push $PACKAGE_NAME oci://cr.yandex/$REGISTRY_ID
+

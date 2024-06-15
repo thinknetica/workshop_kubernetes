@@ -1,0 +1,77 @@
+name: 'yc-cli-install'
+description: 'Install and configure Yandex Cloud CLI'
+inputs:
+  INSTALL_DIR:
+    description: 'Directory to install Yandex Cloud CLI. Default is /usr/local/bin'
+    required: false
+    default: '/usr/local/bin'
+  YC_TOKEN:
+    description: 'Yandex Cloud OAuth token'
+    required: false
+  YC_SERVICE_ACCOUNT_KEY:
+    description: 'Yandex Cloud Service Account key in JSON format'
+    required: false
+  YC_CLOUD_ID:
+    description: 'Yandex Cloud ID'
+    required: true
+  YC_FOLDER_ID:
+    description: 'Yandex Folder ID'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get latest yc version number
+      shell: bash
+      id: version
+      run: |
+        echo "value=$(curl -s --fail https://storage.yandexcloud.net/yandexcloud-yc/release/stable)" >> $GITHUB_ENV
+
+    - name: Cache yc binary
+      uses: actions/cache@v4
+      id: cache-yc-cli
+      with:
+        path: ${{ inputs.INSTALL_DIR }}/yc
+        key: yc-cli-${{ env.value }}
+
+    - name: Get yc binary if cache miss
+      if: steps.cache-yc-cli.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        echo Downloading yc cli version ${{ env.value }}
+        curl https://storage.yandexcloud.net/yandexcloud-yc/install.sh | \
+          bash -s -- -i $HOME/yandex-cloud -n
+        sudo mv $HOME/yandex-cloud/bin/yc ${{ inputs.INSTALL_DIR }}/yc
+
+    - name: Verify yc installation
+      shell: bash
+      run: |
+        ls -l ${{ inputs.INSTALL_DIR }}/yc
+        yc --version
+
+    - name: Set permissions for yc cli binary
+      shell: bash
+      run: |
+        sudo chmod a+rx ${{ inputs.INSTALL_DIR }}/yc
+
+    - name: Authenticate Yandex Cloud with OAuth token
+      if: ${{ inputs.YC_TOKEN }}
+      shell: bash
+      run: |
+        yc config set token ${{ inputs.YC_TOKEN }}
+        yc config set cloud-id ${{ inputs.YC_CLOUD_ID }}
+        yc config set folder-id ${{ inputs.YC_FOLDER_ID }}
+
+    - name: Authenticate Yandex Cloud with Service Account key
+      if: ${{ inputs.YC_SERVICE_ACCOUNT_KEY }}
+      shell: bash
+      run: |
+        echo ${{ inputs.YC_SERVICE_ACCOUNT_KEY }} > /tmp/key.json
+        yc config set service-account-key /tmp/key.json
+        yc config set cloud-id ${{ inputs.YC_CLOUD_ID }}
+        yc config set folder-id ${{ inputs.YC_FOLDER_ID }}
+
+    - name: Print yc version
+      shell: bash
+      run: |
+        yc --version

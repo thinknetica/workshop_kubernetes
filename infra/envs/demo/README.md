@@ -22,7 +22,7 @@ provider_installation {
 ```
 ### Разворачиваем инфраструктуру
 
-В Yandex Cloud создадим каталог demo2, внутри своего облака.
+В Yandex Cloud создадим каталог demo, внутри своего облака.
 
 Реинициализируем профиль yc
 ```bash
@@ -39,7 +39,7 @@ provider_installation {
 
 ```bash
 ☁ sudo apt install -y jq
-☁ FOLDER_NAME=demo2
+☁ FOLDER_NAME=demo
 ☁ FOLDER_ID=$(yc config get folder-id)
 ☁ echo $FOLDER_ID
 ☁ CLOUD_ID=$(yc config get cloud-id)
@@ -141,7 +141,7 @@ provider "yandex" {
 Запустим terraform
 ```bash
 ☁ cd ..
-☁ cd infra/envs/day-2
+☁ cd infra/envs/demo
 ☁ terraform init
 ☁ terraform validate
 ☁ terraform plan
@@ -178,7 +178,8 @@ To access clusters using the Kubernetes API, please use Kubernetes Service Accou
 ### Удаление инфраструктуры
 
 ```bash
-REGISTRY_NAME=day-2
+yc config profile activate default
+REGISTRY_NAME=demo
 for image in $(yc container image list --registry-name $REGISTRY_NAME --format json | jq -r '.[].id'); do
   yc container image delete $image
 done

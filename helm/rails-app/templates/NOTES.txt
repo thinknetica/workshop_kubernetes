@@ -1,0 +1,7 @@
+1. Get the application URL by running these commands:
+{{- if contains "ClusterIP" .Values.service.type }}
+  export SERVICE_NAME={{ include "rails-app.fullname" . }}
+  export SERVICE_PORT={{ .Values.service.port }}
+  echo "Visit http://127.0.0.1:3000 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/$SERVICE_NAME 3000:$SERVICE_PORT
+{{- end }}

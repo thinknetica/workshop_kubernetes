@@ -1,0 +1,40 @@
+name: "App Test"
+on:
+  - push
+  - pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      RAILS_ENV: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Ruby and gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.1'
+          bundler-cache: true
+      - name: Install dependencies
+        working-directory: ./app
+        run: bundle install
+      - name: Run tests
+        working-directory: ./app
+        run: bundle exec rspec
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Ruby and gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.1'
+          bundler-cache: true
+      - name: Install dependencies
+        working-directory: ./app
+        run: bundle install
+      - name: Lint Ruby files
+        working-directory: ./app
+        run: bundle exec rubocop --parallel

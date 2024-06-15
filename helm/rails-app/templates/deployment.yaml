@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rails-app.fullname" . }}
+  labels:
+    {{- include "rails-app.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rails-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "rails-app.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          command: ["./bin/rails"]
+          args: ["server"]
+          env:
+            {{- range .Values.secretEnvs }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rails-app.fullname" $ }}-secret
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.configMapEnvs }}
+            - name: {{ .name }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "rails-app.fullname" $ }}-config
+                  key: {{ .configKey }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: {{ include "rails-app.fullname" . }}-secret
+

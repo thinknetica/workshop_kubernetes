@@ -1,0 +1,48 @@
+{{- if .Values.seeds.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rails-app.fullname" . }}-seed
+  labels:
+    {{- include "rails-app.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install, pre-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "rails-app.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: job-rails-app-seed
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['bin/rails']
+          args: ['db:seed']
+          env:
+            {{- range .Values.secretEnvs }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rails-app.fullname" $ }}-secret
+                  key: {{ .secretKey }}
+            {{- end }}
+            {{- range .Values.configMapEnvs }}
+            - name: {{ .name }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "rails-app.fullname" $ }}-config
+                  key: {{ .configKey }}
+            {{- end }}
+          volumeMounts:
+            {{- toYaml .Values.volumeMounts | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: {{ include "rails-app.fullname" . }}-secret
+      restartPolicy: Never
+{{- end }}
