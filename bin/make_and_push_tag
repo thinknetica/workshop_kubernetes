@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+# Ensure the image string is provided as an argument
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 <version>"
+  echo "Example: $0 0.0.1"
+  exit 1
+fi
+
+VERSION=$1
+
+git tag "v${VERSION}"
+git push origin "v${VERSION}"
